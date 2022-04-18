@@ -1,5 +1,7 @@
 .nolist
-#include ".\ti83plus.inc"
+; The EZ80 plugin in VS Code keeps complaining "file not found" here
+; Change the include line to "#include ".\ti83plus.inc" if you want to assemble using SPASM-ng"
+#include ".\..\ti83plus.inc"
 .list
 ; My plan is to create an AppVar on start-up
 ; then use it as a U8's registers and RAM savestate
@@ -10,8 +12,8 @@
 ;		U8 registers	39 bytes
 ;		save pointers	16 bytes
 ;				268 bytes left
-U8regs		equ	tempSwapArea
-saveTable	equ	tempSwapArea + 39
+U8regs		.equ	tempSwapArea
+saveTable	.equ	tempSwapArea + 39
 
 ; appBackUpScreen reserved for custom ISR and variable-related stuff.
 ;		U8 RAM ptr	2 bytes
@@ -19,15 +21,15 @@ saveTable	equ	tempSwapArea + 39
 ;	$9898	custom ISR	0 bytes
 ;		vector table	257 bytes
 ;				473 bytes left
-pU8RAM		equ	appBackUpScreen
-ISR		equ	$9898
+pU8RAM		.equ	appBackUpScreen
+ISR		.equ	$9898
 
 ; saveSScreen:
 ;		U8 SFRs		256 bytes
 ;		U8 VRAM		512 bytes
 ;				0 bytes left
-U8SFR		equ	saveSScreen
-U8VRAM		equ	saveSScreen + 256
+U8SFR		.equ	saveSScreen
+U8VRAM		.equ	saveSScreen + 256
 
 ; ================
 
@@ -39,7 +41,7 @@ U8VRAM		equ	saveSScreen + 256
 searchSaves:
 	ld	hl,		saveTable
 	push	hl				; push pointer into stack
-	ld	hl,		name
+	ld	hl,		ss_name
 	rst	rMOV9TOOP1			; copy name into OP1
 ss_loop:
 	ld	hl,		OP1 + 8		; load the address of number
@@ -70,9 +72,9 @@ ss_getAddr:
 ss_done:
 	pop	hl
 	ret
-name:
+ss_name:
 	.db	AppVarObj
-header:
+ci_header:
 	.db	"Emu8"
 	.db	"sav0"
 
@@ -87,7 +89,7 @@ createInstance:
 	rst	$38
 	.dw	_CreateAppVar		; create the AppVar
 	push	de			; preserve variable data pointer
-	ld	hl,		header
+	ld	hl,		ci_header
 	ld	bc,		4
 	ldir				; copy header into variable
 	pop	hl			; restore variable data pointer
