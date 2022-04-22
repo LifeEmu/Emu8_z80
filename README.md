@@ -21,10 +21,16 @@ Currently the target is only TI-83 Plus and its monochrome variants.
 ## Special Thanks to...
 * Zeroko for overall program structure
 * calc84maniac for their look-up table idea
+* Tari for variable data structure information
 * fghsgh for helping me figuring out memory layout and VAT stuff
 * Cemetech for providing such an amazing calculator community
 * You for using this program
 
 ## Miscellaneous
+
+### Current progress
+
+* The look-up table is finished
+* Overall structure of the emulator had been worked out
 
 im not familiar with z80 assembly nor git nor github nor English pls do not blame me if i made silly moves *sobs*
