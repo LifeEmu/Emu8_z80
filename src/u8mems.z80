@@ -1,23 +1,5 @@
-.nolist
-; The EZ80 plugin in VS Code keeps complaining "file not found" here
-; Change the include line to "#include ".\ti83plus.inc" if you want to assemble using SPASM-ng"
-; Or just execute in the ./src directory
+#include "inc/u8mems.inc"
 
-#include ".\..\ti83plus.inc"
-.list
-
-; My plan is to create an AppVar on start-up
-; then use it as a U8's registers and RAM savestate
-; it's more general and works on 83+BE as well
-; assume DE contains the address of the variable
-
-; An AppVar has the following fields:
-; Size - 2 bytes, little endian
-; Data - size bytes
-
-; so, this file need a HUGE refactorying
-
-#include ".\..\u8mems.inc"
 ; ================
 
 ; Search for savestates, store their data pointers into a fixed-length table.
@@ -25,18 +7,19 @@
 ; In:		None
 ; Out:		None
 ; Destroys:	All
+; Test:		Passed
 searchSaves:
-	ld	hl,		saveTable
+	ld	hl,		savePtrTable
 	push	hl				; push pointer into stack
 	ld	hl,		ss_name
 	rst	rMOV9TOOP1			; copy name into OP1
 ss_loop:
 	ld	hl,		OP1 + 8		; load the address of number
 	inc	(hl)				; increment it
-	ld	a,		'9'
-	cp	(hl)				; compare number with '9'
+	ld	a,		'5'
+	cp	(hl)				; compare number with '5'
 	jr	z,		ss_done		; if equal, search is done
-	rst	$38
+	rst	$28
 	.dw	_ChkFindSym
 
 	jr	c,		ss_notFound	; no such variable
@@ -56,6 +39,7 @@ ss_getAddr:
 	ld	(hl),		d		; save DE into it
 	inc	hl
 	push	hl				; push incremented pointer back
+	jr	ss_loop
 ss_done:
 	pop	hl
 	ret
@@ -65,106 +49,128 @@ ci_header:
 	.db	"Emu8"
 	.db	"sav0"
 
-; Creates a new instance whose name is pointed to by HL
-; Memory should be checked before invoking this function.
-; In:		HL - points to name
-; Out:		HL - points to start of the savestate variable
+; Create and initialize AppVar "Emu8sav0", also initialize (workRAMPtr)
+; Memory should be checked BEFORE invoking this function.
+; In:		None
+; Out:		DE - points to start of the savestate variable
 ; Destroys:	All
-createInstance:
-	rst	rMOV9TOOP1		; AppVar name
-	ld	hl,		4395	; size
-	rst	$38
-	.dw	_CreateAppVar		; create the AppVar
-	push	de			; preserve variable data pointer
+; Test:		Passed
+createWorkRAM:
+	ld	hl,		ss_name
+	rst	rMOV9TOOP1			; AppVar name
+	ld	hl,		workRAMSize	; size
+	rst	$28
+	.dw	_CreateAppVar			; create the AppVar
+	push	de				; preserve variable data pointer
+	inc	de
+	inc	de				; skip size field
 	ld	hl,		ci_header
 	ld	bc,		4
-	ldir				; copy header into variable
-	pop	hl			; restore variable data pointer
+	ldir					; copy header into variable
+	pop	hl				; restore variable data pointer
+	ld	(workRAMPtr),	hl		; save pointer
+	ex	de,		hl		; swap pointer back into DE
 	ret
 
-; Set up R/W memory for U8 emulation, also update pU8RAM
-; In:		DE - points to start of a new savestate variable
-;		HL - points to start of the savestate variable
+; Copy savestate content between two savestate variables
+; In:		DE - points to start of the destination
+;		HL - points to start of a savestate variable
 ; Out:		None
 ; Destroys:	All
-loadstate:
-	ld	bc,		4
-	ldir					; copy header section
-	ld	(pU8RAM),	de		; update pU8RAM
-	ld	bc,		3584
-	ldir					; copy RAM into new savestate
-	ld	bc,		768
-	ld	de,		U8SFR
-	ldir					; copy SFR and VRAM section into saveSScreen
-	ld	bc,		39
-	ld	de,		U8regs
-	ldir					; copy registers into tempSwapArea
-	ret
-
-; Save U8 memory into savestate file
-; In:		DE - points to start of the savestate variable
-; Out:		None
-; Destroys:	All
-savestate:
-	ld	hl,		4
-	add	hl,		de		; go past header
+; Test:		Undone
+copyState:
+	ld	bc,		2 + 4
+	add	hl,		bc		; skip size field and header
 	ex	de,		hl
-	ld	hl,		(pU8RAM)	; load U8 RAM pointer
-	ld	bc,		3584
-	ldir					; copy RAM into savestate
-	ld	hl,		U8SFR
-	ldir					; copy SFR and VRAM section
-	ld	bc,		39
-	ld	hl,		U8regs
-	ldir					; copy registers
+	add	hl,		bc		; skip size field and header
+	ex	de,		hl
+	ld	bc,		saveSize
+	ldir					; copy the whole savestate
 	ret
 
-; Rename the temporary variable "Emu8sav0" to some other names
-; No checks are made, only invoke this function AFTER createInstance
-; In:		A - 
+; Turn "Emu8sav0" into a valid savestate variable
+; No checks are made, assuming variable exists.
+; Only invoke this function AFTER createWorkRAM!
+; In:		A - new number (NOT character!)
+; Out:		None
+; Destroys:	All
+; Test:		Passed
+makeState:
+	push	af
+	ld	hl,		ss_name
+	rst	rMOV9TOOP1			; AppVar name
+	rst	$28
+	.dw	_ChkFindSym			; HL points to VAT entry, carry reset
+	ld	bc,		14
+	sbc	hl,		bc		; HL points to last letter of its name
+	pop	af
+	add	a,		'0'		; convert A into a char
+	ld	(hl),		a		; modify name
+	ret
 
-; following layout uses 4395 bytes
+; Swap two equally-sized chunks of memory
+; There's a JP instruction making it non-relocatable
+; In:		HL - points to start of a memory block
+;		DE - points to start of another memory block
+;		BC - size of the blocks to be swapped
+; Destroys:	All
+; Test:		Undone
+memSwap:
+	ld	a,		(de)
+	ldi
+	dec	hl
+	ld	(hl),		a
+	inc	hl
+	jp	pe,		memSwap		; jacobly's suggestion
+	ret
 
-; Header "Emu8"		4	bytes
-; RAM	$8000 - $8dff	3584	bytes
-; SFR	$f000 - $f0ff	256	bytes
-; VRAM	$f800 - $f9ff	512	bytes
+; Swap two parts of one continuous chunk of memory using reversal algorithm
+; In:		HL - points to start of the memory block
+;		BC - size of the first part
+;		DE - size of the second part
+; Out:		None
+; Destroys:	All
+; Test:		Undone
+memSwapOverlap:
+	push	hl
+	push	bc
+	push	de
+	push	de				; backup the size of the second block
+	call	memReverse			; reverse the first part
+	pop	bc				; restore size into BC
+	call	memReverse			; reverse the second part
+	pop	hl				; HL = size of the second part
+	pop	bc				; BC = size of the first part
+	add	hl,		bc		; add them together
+	ld	c,		l
+	ld	b,		h		; copy the total size into BC
+	pop	hl				; restore the pointer
+	call	memReverse			; reverse the whole thing
+	ret
 
-; U8 registers		39	bytes
-; R0		1
-; R1		1
-; R2		1
-; R3		1
-; R4		1
-; R5		1
-; R6		1
-; R7		1
-; R8		1
-; R9		1
-; R10		1
-; R11		1
-; R12		1
-; R13		1
-; R14		1
-; R15		1
-
-; PSW		1
-; EPSW1		1
-; EPSW2		1
-; EPSW3		1
-
-; SP		2
-
-; CSR		1
-; PC		2
-; LCSR		1
-; LR		2
-; ECSR1		1
-; ELR1		2
-; ECSR2		1
-; ELR2		2
-; ECSR3		1
-; ELR3		2
-
-; EA		2
-; AR is invisible to programmer. I will use HL instead.
+; Reverse a chunk of memory
+; In:		HL - points to start of a memory block
+;		BC - size of the memory block
+; Out:		HL - points to the first byte that doesn't belong to the memory block
+; Destroys:	All
+; Test:		Undone
+memReverse:
+	push	hl				; preserve pointer
+	dec	bc				; convert count to offset
+	add	hl,		bc		; modify HL to point to the last byte
+	pop	de				; restore head pointer into DE
+	push	hl				; backup tail pointer
+mr_loop:					; Yay Mr.Loop
+	ld	a,		(de)		; backup (DE) to A
+	ldi					; LD (DE+), (HL+)
+	dec	hl				; restore HL
+	ld	(hl),		a		; load (HL) with A
+	dec	hl				; decrement HL
+; CP HL, DE from calc84maniac
+	or	a				; clear carry flag
+	sbc	hl,		de		; compare HL with DE. Carry set if HL < DE
+	add	hl,		de		; restore HL, also overflows back if SBC HL, DE overflows
+	jr	nc,		mr_loop		; loop if HL >= DE
+	pop	hl				; restore tail pointer
+	inc	hl				; modify it to point to first byte that does not belongs to the block
+	ret

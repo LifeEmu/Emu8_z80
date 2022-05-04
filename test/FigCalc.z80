@@ -1,0 +1,300 @@
+start:
+
+include	'fasmg_inc/z80.inc'
+include	'fasmg_inc/ti83plusg_.inc'
+include	'fasmg_inc/tiformat.inc'
+
+safeRAM		=	ti.saveSScreen
+customISR_org	=	$8787
+customISR_vec	=	$8800
+customISR_len	=	(ISR_end-ISR_begin)
+
+format ti application 'AFigCalc'  ; define page 0 and application name
+
+main:
+
+; It's simply $4080
+	res	ti.apdAble,	(iy+ti.apdFlags); disable APD so we can use saveSScreen
+	bcall(ti.ClrLCDFull)			; clear the whole display, reset cursor position
+	ld	hl,		str_title
+	call	sub_appPutS
+	ld	hl,		str_warning
+	call	sub_appPutS
+	ld	hl,		7
+	ld	(ti.curRow),	hl
+	ld	hl,		str_promptKbd
+	call	sub_appPutS
+main_waitMODE:
+	bcall(ti.getkey)
+	cp	ti.kMode
+	jr	nz,		main_waitMODE
+
+	ld	hl,		$0002
+	ld	(ti.curRow),	hl
+	ld	a,		ti.LDnBlk	; Letter "Down Black"
+	bcall(ti.PutC)
+	call	sub_dispSprite			; test if it works
+
+	set	ti.apdAble,	(iy+ti.apdFlags); re-enable APD
+	bcall(ti.ClrLCDFull)
+	bcall(ti.getkey)
+
+	bcall(ti.ReloadAppEntryVecs)
+	bjump(ti.JForceCmdNoChar)
+
+
+; displays a zero-terminated string
+; destroys: AF, HL
+
+sub_appPutS:
+	push	hl
+	ld	a,		7
+	ld	hl,		ti.curRow
+	cp	(hl)
+	jr	nc,		appPutS_getHL	; print if curRow is less than 8
+	push	bc
+	push	de
+	bcall(ti.ClrLCDFull)			; do a ClrHome
+	pop	de
+	pop	bc				; clear screen
+appPutS_getHL:
+	pop	hl
+appPutS_loop:
+	ld	a,		(hl)
+	or	a
+	jr	z,		appPutS_newline
+	bcall(ti.PutC)
+	inc	hl
+	jr	appPutS_loop
+appPutS_newline:
+	ld	a,		0
+	ld	(ti.curCol),	a
+	ld	hl,		ti.curRow
+	inc	(hl)
+	ret
+
+
+; clears saveSScreen
+; fully working now
+; destroys: AF, BC, HL
+; A = $00, BC = $0000, HL = (saveSScreen + 96 * 64)
+
+sub_clrSafeRAM:
+	ld	a,		0
+	ld	hl,		ti.saveSScreen
+	ld	bc,		3		;C * 3 + B = 768
+clrSafeRAM_loop:
+	ld	(hl),		a
+	inc	hl
+	djnz	clrSafeRAM_loop
+	dec	c
+	jr	nz,	clrSafeRAM_loop
+	ret
+
+
+; displays A in hexadecimal
+; fully working now
+; destroys: F, BC
+; B = $00, C = A
+
+sub_dispAHex:
+	ld	c,		a
+	ld	b,		2
+	rlca
+	rlca
+	rlca
+	rlca
+dispAHex_loop:
+	and	$0f				; get lower 4 bits
+	cp	$0a
+	jr	c,		noinc
+	add	a,		$07
+noinc:
+	add	a,		$30
+	bcall(ti.PutC)
+	ld	a,		c
+	djnz	dispAHex_loop
+	ret
+
+
+; displays an 8 by 8 grayscale sprite
+; this one utilizes custom interrupts
+; destroys: All
+sub_dispSprite:
+	call	ISR_install
+	ld	a,		01000000b	; enable right-est column
+	out	($01),		a		; output to kbd port
+	ei
+
+dispSprite_waitLoop:
+	halt					; wait until an interrupt occur
+
+	in	a,		($01)		; get keyboard
+	xor	$ff				; invert it
+	jr	z,		dispSprite_waitLoop	; finish if any key
+
+	ld	a,		11111111b	; unselect all groups
+	out	($01),		a		; output to kbd port
+	call	ISR_uninstall
+	ret
+
+; installs a custom ISR
+; this disables interrupts
+; destroys: All
+
+ISR_install:
+	di					; disable interrupts
+
+; set up vector table
+	ld	hl,		customISR_vec	; src
+	ld	a,		$87
+	ld	(hl),		a		; prepare first value
+	ld	de,		customISR_vec+1 ; dest
+	ld	bc,		256		; size
+	ldir
+
+; copy ISR routine
+	ld	hl,		ISR		; src
+	ld	de,		customISR_org	; dest
+	ld	bc,		customISR_len	; size
+	ldir
+
+; set up ports
+	ld	a,		0
+	out	($02),		a		; acknowledge all interrupts
+	ld	a,		00001010b	; enable 1st HW timer and
+	out	($03),		a		;   keep powered when HALT
+	ld	a,		00000110b	; memory map mode 0 and
+	out	($04),		a		;   slowest frequency
+
+; setup I register
+	ld	a,		(customISR_vec) shr 8
+	ld	i,		a
+
+; everything is done
+	im	2				; set to IM 2 baby!
+	ret
+
+
+; uninstall the custom ISR
+; interrupts enabled upon exit
+; destroys: AF
+
+ISR_uninstall:
+	di
+	ld	a,		0
+	out	($02),		a		; acknowledge all interrupts
+	ld	a,		00001011b	; enable 1st HW timer and
+	out	($03),		a		;   ON key interrupt
+	im	1				; set back to IM 1
+	ei
+	ret
+
+
+; data goes here
+str_title:
+	db	"Calc info", 0
+str_warning:
+	db	"APD disabled!", 0
+str_promptKbd:
+	db	"Press MODE...", 0
+tile_marble:
+	db	$3C,$42,$C1,$E1,$E1,$F1,$7E,$3C	; darker layer
+	db	$3C,$7A,$B9,$9D,$9F,$8F,$42,$3C	; lighter layer
+
+; the REAL hard one
+; 907 T-states at worst case (the darker layer)
+; 900 T-states when drawing the lighter layer
+; 139 T-states when hitTimer is 3
+; 124 T-states when even hitTimer encountered
+; destroys: AF', BC', HL'
+ISR:
+virtual at customISR_org
+ISR_begin:
+	ex	af,		af'
+	exx
+	ld	a,		(ISR_hitTimer)
+	inc	a				; update timer
+	and	$07				; mask it
+	cp	$06				; is A = 6?
+	jr	nz,		ISR_skip	; if not, skip
+	xor	a				; else reset A
+
+ISR_skip:
+	ld	(ISR_hitTimer),	a		; write back
+; upon normal execution, hitTimer should not be greater than 6,
+;   thus CP $06 always resets carry. I'm a genius.
+	rra					; move bit 0 into carry
+	jr	nc,		ISR_nothing	; do nothing if even
+
+	ccf					; inverse carry flag
+	rra
+	jr	c,		ISR_nothing	; do nothing if 3
+
+; here A contains either 0 or 1 in bit 0, carry is reset.
+	rra
+	jr	c,		ISR_lighter
+	ld	hl,		tile_marble
+	jr	ISR_loaded
+ISR_lighter:
+	ld	hl,		tile_marble+8
+
+ISR_loaded:
+; here HL contains corresponding address. let's draw!
+	ld	a,		(ISR_curRow)	; set row		| 13
+	add	a,		$80		; make a command	| 7
+	out	($10),		a		; output to LCD cmd	| 11
+	push	af				;			| 10
+	pop	af				;			| 10
+	push	af				; waste 40 cycles	| 10
+	pop	af				;			| 10
+	ld	a,		(ISR_curCol)	; set column		| 13
+	add	a,		$20		; make a command	| 7
+	out	($10),		a		; output to LCD cmd	| 11
+	ld	b,		8		; repeat 8 times	| 7
+	inc	b				;			| 4
+	dec	b				; waste 8 cycles	| 4
+ISR_dispLoop:
+; this takes 563 T-states
+	ld	a,		(hl)		; load data		| 7
+	inc	hl				; increment pointer	| 6
+	push	af				;			| 10
+	ld	a,		(hl)		; just waste time	| 7
+	ld	a,		(hl)		;			| 7
+	pop	af				;			| 10
+	out	($11),		a		; output to LCD data	| 11
+	djnz	ISR_dispLoop			; loop while B!=0	| 13
+
+ISR_nothing:
+	ld	bc,		$0002
+	out	(c),		b		; acknowledge all interrupts
+	exx
+	ex	af,		af'
+	ei					; re-enable interrupts since
+	ret					;   Z80 disables it when interrupts occur
+
+ISR_hitTimer:
+	db	0				; increase 1 if ISR is hit
+
+; value		| behavior
+; 
+; 1	001	|  display darker layer
+; 2	010	| do nothing
+; 3	011	|  do nothing
+; 4	100	| do nothing
+; 5	101	|  display lighter layer
+; 0	000	| do nothing
+
+ISR_curRow:
+	db	24
+ISR_curCol:
+	db	0
+
+; used to calculate the size of ISR
+ISR_end:
+	load	ISR_block : $ - $$ from $$
+end virtual
+	db	ISR_block
+
+page
+	db	'wut'

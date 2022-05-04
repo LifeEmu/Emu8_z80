@@ -6,6 +6,7 @@
 ; In:		HL - first word of an U8 instruction
 ; Out:		HL - address to the subroutine for further decoding
 ; Destroys:	All
+; Test:		Undone
 decode_LUT:
 	ld	a,		h
 	and	$f0				; higher nybble in A

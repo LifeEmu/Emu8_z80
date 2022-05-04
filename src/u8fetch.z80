@@ -1,6 +1,0 @@
-.nolist
-#ifndef EQU
-#include ".\..\ti83plus.inc"
-#endif
-.list
-

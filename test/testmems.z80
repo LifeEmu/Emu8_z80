@@ -1,0 +1,25 @@
+.nolist
+#include "inc/ti83plus.inc"
+.list
+	.org	$9d93
+	.db	$bb, $6d
+
+	call	createWorkRAM
+	ld	a,		1
+	call	makeState
+	call	createWorkRAM
+	ld	a,		2
+	call	makeState
+	call	createWorkRAM
+	ld	a,		3
+	call	makeState
+	ld	hl,		ss_name
+	rst	$20
+	ld	hl,		OP1+8
+	ld	(hl),		'2'
+	bcall(_Arc_Unarc)
+	call	createWorkRAM
+	call	searchSaves
+	ret
+
+#include "src/u8mems.z80"

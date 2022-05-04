@@ -1,0 +1,173 @@
+include 'test/u8memsg.inc'
+
+; ================
+
+; Search for savestates, store their data pointers into a fixed-length table.
+; $0000 = not found, empty; $0001 = archived
+; In:		None
+; Out:		None
+; Destroys:	All
+; Test:		Passed
+searchSaves:
+	ld	hl,		savePtrTable
+	push	hl				; push pointer into stack
+	ld	hl,		ss_name
+	rst	ti.rMOV9TOOP1			; copy name into OP1
+ss_loop:
+	ld	hl,		ti.OP1 + 8		; load the address of number
+	inc	(hl)				; increment it
+	ld	a,		'5'
+	cp	(hl)				; compare number with '5'
+	jr	z,		ss_done		; if equal, search is done
+	bcall(ti.ChkFindSym)
+
+	jr	c,		ss_notFound	; no such variable
+	xor	a
+	cp	b
+	jr	nz,		ss_archived	; found but archived
+	jr	ss_getAddr			; found and not archived
+ss_notFound:
+	ld	de,		0
+	jr	ss_getAddr
+ss_archived:
+	ld	de,		1
+ss_getAddr:
+	pop	hl				; get pointer to table
+	ld	(hl),		e
+	inc	hl
+	ld	(hl),		d		; save DE into it
+	inc	hl
+	push	hl				; push incremented pointer back
+	jr	ss_loop
+ss_done:
+	pop	hl
+	ret
+ss_name:
+	db	ti.AppVarObj
+ci_header:
+	db	"Emu8"
+	db	"sav0"
+
+; Create and initialize AppVar "Emu8sav0", also initialize (workRAMPtr)
+; Memory should be checked BEFORE invoking this function.
+; In:		None
+; Out:		DE - points to start of the savestate variable
+; Destroys:	All
+; Test:		Passed
+createWorkRAM:
+	ld	hl,		ss_name
+	rst	ti.rMOV9TOOP1			; AppVar name
+	ld	hl,		workRAMSize	; size
+	bcall(ti.CreateAppVar)			; create the AppVar
+	push	de				; preserve variable data pointer
+	inc	de
+	inc	de				; skip size field
+	ld	hl,		ci_header
+	ld	bc,		4
+	ldir					; copy header into variable
+	pop	hl				; restore variable data pointer
+	ld	(workRAMPtr),	hl		; save pointer
+	ex	de,		hl		; swap pointer back into DE
+	ret
+
+; Copy savestate content between two savestate variables
+; In:		DE - points to start of the destination
+;		HL - points to start of a savestate variable
+; Out:		None
+; Destroys:	All
+; Test:		Undone
+copyState:
+	ld	bc,		2 + 4
+	add	hl,		bc		; skip size field and header
+	ex	de,		hl
+	add	hl,		bc		; skip size field and header
+	ex	de,		hl
+	ld	bc,		saveSize
+	ldir					; copy the whole savestate
+	ret
+
+; Turn "Emu8sav0" into a valid savestate variable
+; No checks are made, assuming variable exists.
+; Only invoke this function AFTER createWorkRAM!
+; In:		A - new number (NOT character!)
+; Out:		None
+; Destroys:	All
+; Test:		Passed
+makeState:
+	push	af
+	ld	hl,		ss_name
+	rst	ti.rMOV9TOOP1			; AppVar name
+	bcall(ti.ChkFindSym)			; HL points to VAT entry, carry reset
+	ld	bc,		14
+	sbc	hl,		bc		; HL points to last letter of its name
+	pop	af
+	add	a,		'0'		; convert A into a char
+	ld	(hl),		a		; modify name
+	ret
+
+; Swap two equally-sized chunks of memory
+; There's a JP instruction making it non-relocatable
+; In:		HL - points to start of a memory block
+;		DE - points to start of another memory block
+;		BC - size of the blocks to be swapped
+; Destroys:	All
+; Test:		Undone
+memSwap:
+	ld	a,		(de)
+	ldi
+	dec	hl
+	ld	(hl),		a
+	inc	hl
+	jp	pe,		memSwap		; jacobly's suggestion
+	ret
+
+; Swap two parts of one continuous chunk of memory using reversal algorithm
+; In:		HL - points to start of the memory block
+;		BC - size of the first part
+;		DE - size of the second part
+; Out:		None
+; Destroys:	All
+; Test:		Undone
+memSwapOverlap:
+	push	hl
+	push	bc
+	push	de
+	push	de				; backup the size of the second block
+	call	memReverse			; reverse the first part
+	pop	bc				; restore size into BC
+	call	memReverse			; reverse the second part
+	pop	hl				; HL = size of the second part
+	pop	bc				; BC = size of the first part
+	add	hl,		bc		; add them together
+	ld	c,		l
+	ld	b,		h		; copy the total size into BC
+	pop	hl				; restore the pointer
+	call	memReverse			; reverse the whole thing
+	ret
+
+; Reverse a chunk of memory
+; In:		HL - points to start of a memory block
+;		BC - size of the memory block
+; Out:		HL - points to the first byte that doesn't belong to the memory block
+; Destroys:	All
+; Test:		Undone
+memReverse:
+	push	hl				; preserve pointer
+	dec	bc				; convert count to offset
+	add	hl,		bc		; modify HL to point to the last byte
+	pop	de				; restore head pointer into DE
+	push	hl				; backup tail pointer
+mr_loop:					; Yay Mr.Loop
+	ld	a,		(de)		; backup (DE) to A
+	ldi					; LD (DE+), (HL+)
+	dec	hl				; restore HL
+	ld	(hl),		a		; load (HL) with A
+	dec	hl				; decrement HL
+; CP HL, DE from calc84maniac
+	or	a				; clear carry flag
+	sbc	hl,		de		; compare HL with DE. Carry set if HL < DE
+	add	hl,		de		; restore HL, also overflows back if SBC HL, DE overflows
+	jr	nc,		mr_loop		; loop if HL >= DE
+	pop	hl				; restore tail pointer
+	inc	hl				; modify it to point to first byte that does not belongs to the block
+	ret
