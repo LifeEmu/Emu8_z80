@@ -1,0 +1,46 @@
+include 'fasmg_inc/z80.inc'
+include 'fasmg_inc/ti83plusg_.inc'
+include 'fasmg_inc/tiformat.inc'
+format ti executable 'TESTMEMS'
+
+	call	createWorkRAM			; create Emu8sav0
+	ld	a,		1
+	call	makeState			; make Emu8sav1
+	call	createWorkRAM
+	ld	a,		2
+	call	makeState			; make Emu8sav2
+	call	createWorkRAM
+	ld	a,		3
+	call	makeState			; make Emu8sav3
+	ld	hl,		saveName
+	rst	ti.rMOV9TOOP1			; copy "Emu8sav0" into OP1
+	ld	hl,		ti.OP1+8
+	ld	(hl),		'2'		; change the last digit to 2
+	bcall(ti.Arc_Unarc)			; archive "Emu8sav2"
+	call	createWorkRAM			; make Emu8sav0
+	call	searchSaves			; search for savestates, results are in savePtrTable
+
+	ld	hl,		memory.swap1
+	ld	de,		memory.swap2
+	ld	bc,		memory.swapsize
+	call	memSwap				; result should be "ABCDEFxxx" and "abcdefXXX"
+	ld	hl,		memory.rot
+	ld	bc,		memory.rot1size
+	ld	de,		memory.rot2size
+	call	memSwapOverlap			; result should be "ROTATIONBrota"
+	ret
+
+memory:
+.swap1:
+	db	"abcdefxxx"
+.swap2:
+	db	"ABCDEFXXX"
+.swapsize = 6
+
+.rot:
+	db	"rotaROTATIONB"
+
+.rot1size = 4
+.rot2size = 9
+
+include 'src/u8memsg.z80'

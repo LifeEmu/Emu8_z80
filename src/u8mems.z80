@@ -1,9 +1,9 @@
-#include "inc/u8mems.inc"
+include 'inc/u8mems.inc'
 
 ; ================
 
 ; Search for savestates, store their data pointers into a fixed-length table.
-; $0000 = not found, empty; $0001 = archived
+; $0000 = not found, empty; $0100 = archived
 ; In:		None
 ; Out:		None
 ; Destroys:	All
@@ -11,43 +11,43 @@
 searchSaves:
 	ld	hl,		savePtrTable
 	push	hl				; push pointer into stack
-	ld	hl,		ss_name
-	rst	rMOV9TOOP1			; copy name into OP1
-ss_loop:
-	ld	hl,		OP1 + 8		; load the address of number
+	ld	hl,		saveName
+	rst	ti.rMOV9TOOP1			; copy name into OP1
+.loop:
+	ld	hl,		ti.OP1 + 8		; load the address of number
 	inc	(hl)				; increment it
 	ld	a,		'5'
 	cp	(hl)				; compare number with '5'
-	jr	z,		ss_done		; if equal, search is done
-	rst	$28
-	.dw	_ChkFindSym
+	jr	z,		.done		; if equal, search is done
+	bcall(ti.ChkFindSym)
 
-	jr	c,		ss_notFound	; no such variable
+	jr	c,		.notFound	; no such variable
 	xor	a
 	cp	b
-	jr	nz,		ss_archived	; found but archived
-	jr	ss_getAddr			; found and not archived
-ss_notFound:
+	jr	nz,		.archived	; found but archived
+	jr	.getAddr			; found and not archived
+.notFound:
 	ld	de,		0
-	jr	ss_getAddr
-ss_archived:
-	ld	de,		1
-ss_getAddr:
+	jr	.getAddr
+.archived:
+	ld	de,		$0100
+.getAddr:
 	pop	hl				; get pointer to table
 	ld	(hl),		e
 	inc	hl
 	ld	(hl),		d		; save DE into it
 	inc	hl
 	push	hl				; push incremented pointer back
-	jr	ss_loop
-ss_done:
+	jr	.loop
+.done:
 	pop	hl
 	ret
-ss_name:
-	.db	AppVarObj
-ci_header:
-	.db	"Emu8"
-	.db	"sav0"
+
+saveName:
+	db	ti.AppVarObj
+saveHeader:
+	db	"Emu8"
+	db	"sav0"
 
 ; Create and initialize AppVar "Emu8sav0", also initialize (workRAMPtr)
 ; Memory should be checked BEFORE invoking this function.
@@ -56,15 +56,14 @@ ci_header:
 ; Destroys:	All
 ; Test:		Passed
 createWorkRAM:
-	ld	hl,		ss_name
-	rst	rMOV9TOOP1			; AppVar name
+	ld	hl,		saveName
+	rst	ti.rMOV9TOOP1			; AppVar name
 	ld	hl,		workRAMSize	; size
-	rst	$28
-	.dw	_CreateAppVar			; create the AppVar
+	bcall(ti.CreateAppVar)			; create the AppVar
 	push	de				; preserve variable data pointer
 	inc	de
 	inc	de				; skip size field
-	ld	hl,		ci_header
+	ld	hl,		saveHeader
 	ld	bc,		4
 	ldir					; copy header into variable
 	pop	hl				; restore variable data pointer
@@ -84,7 +83,7 @@ copyState:
 	ex	de,		hl
 	add	hl,		bc		; skip size field and header
 	ex	de,		hl
-	ld	bc,		saveSize
+	ld	bc,		saveSize-headerSize
 	ldir					; copy the whole savestate
 	ret
 
@@ -97,10 +96,9 @@ copyState:
 ; Test:		Passed
 makeState:
 	push	af
-	ld	hl,		ss_name
-	rst	rMOV9TOOP1			; AppVar name
-	rst	$28
-	.dw	_ChkFindSym			; HL points to VAT entry, carry reset
+	ld	hl,		saveName
+	rst	ti.rMOV9TOOP1			; AppVar name
+	bcall(ti.ChkFindSym)			; HL points to VAT entry, carry reset
 	ld	bc,		14
 	sbc	hl,		bc		; HL points to last letter of its name
 	pop	af
@@ -114,7 +112,7 @@ makeState:
 ;		DE - points to start of another memory block
 ;		BC - size of the blocks to be swapped
 ; Destroys:	All
-; Test:		Undone
+; Test:		Passed
 memSwap:
 	ld	a,		(de)
 	ldi
@@ -130,7 +128,7 @@ memSwap:
 ;		DE - size of the second part
 ; Out:		None
 ; Destroys:	All
-; Test:		Undone
+; Test:		Passed
 memSwapOverlap:
 	push	hl
 	push	bc
@@ -145,22 +143,23 @@ memSwapOverlap:
 	ld	c,		l
 	ld	b,		h		; copy the total size into BC
 	pop	hl				; restore the pointer
-	call	memReverse			; reverse the whole thing
-	ret
+;	call	memReverse			; reverse the whole thing
+;	ret
+; tail call and omitting jp memReverse
 
 ; Reverse a chunk of memory
 ; In:		HL - points to start of a memory block
 ;		BC - size of the memory block
 ; Out:		HL - points to the first byte that doesn't belong to the memory block
 ; Destroys:	All
-; Test:		Undone
+; Test:		Passed
 memReverse:
 	push	hl				; preserve pointer
 	dec	bc				; convert count to offset
 	add	hl,		bc		; modify HL to point to the last byte
 	pop	de				; restore head pointer into DE
 	push	hl				; backup tail pointer
-mr_loop:					; Yay Mr.Loop
+.loop:
 	ld	a,		(de)		; backup (DE) to A
 	ldi					; LD (DE+), (HL+)
 	dec	hl				; restore HL
@@ -170,7 +169,7 @@ mr_loop:					; Yay Mr.Loop
 	or	a				; clear carry flag
 	sbc	hl,		de		; compare HL with DE. Carry set if HL < DE
 	add	hl,		de		; restore HL, also overflows back if SBC HL, DE overflows
-	jr	nc,		mr_loop		; loop if HL >= DE
+	jr	nc,		.loop		; loop if HL >= DE
 	pop	hl				; restore tail pointer
 	inc	hl				; modify it to point to first byte that does not belongs to the block
 	ret

@@ -1,4 +1,4 @@
-#include	"inc/ti83plus.inc"
-#include	"inc/app.inc"
-
-	.defpage	0, "Emu8_z80"
+include 'fasmg_inc/z80.inc'
+include 'fasmg_inc/ti83plusg_.inc'
+include 'fasmg_inc/tiformat.inc'
+format ti application 'Emu8_z80'

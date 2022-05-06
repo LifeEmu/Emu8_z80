@@ -1,12 +1,8 @@
-#ifndef U8MEMS_INC_INCLUDED
-
-#define U8MEMS_INC_INCLUDED
-
 ; appBackUpScreen reserved for variable-related stuff.
 ;		pointer table	8 bytes
 ;		Emu8sav0 ptr	2 bytes
 ;				758 bytes left
-savePtrTable		equ	appBackUpScreen
+savePtrTable		equ	ti.appBackUpScreen
 savePtrTableSize	equ	8
 workRAMPtr		equ	savePtrTable + savePtrTableSize
 workRAMPtrSize		equ	2
@@ -27,8 +23,6 @@ saveSize		equ	headerSize + U8RAMSize + U8SFRSize + U8VRAMSize + U8RegsSize
 saveRequired		equ	15 + 2 + saveSize
 workRAMSize		equ	saveSize
 workRAMRequired		equ	15 + 2 + workRAMSize
-
-#endif
 
 ; AppVar object's data structure:
 ; size field		2	bytes
