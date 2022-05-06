@@ -43,4 +43,4 @@ memory:
 .rot1size = 4
 .rot2size = 9
 
-include 'src/u8memsg.z80'
+include 'src/util/savestate.z80'

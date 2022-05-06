@@ -11,6 +11,8 @@ Currently the target is only TI-83 Plus and its monochrome variants.
 ## Installing
 *This project is still on working*
 
+Since the ROMs of CASIO fx-ES PLUS calculators are copyrighted by CASIO, I can't place ROM here and you need to build the application by yourself.
+
 ## Building
 *This project is still on working and cannot be built currently*
 
@@ -26,7 +28,7 @@ You will need [fasmg](http://flatassembler.net/index.php) to build this applicat
 * calc84maniac for their look-up table idea
 * Tari for variable data structure information
 * fghsgh for helps on memory stuff, and fasmg information
-* jacobly for his fasmg header files
+* jacobly for [his fasmg header files](https://github.com/jacobly0/fasmg-z80)
 * LogicalJoe for fasmg stuff
 * Cemetech for providing such an amazing calculator community
 * You for using this program
@@ -38,6 +40,17 @@ You will need [fasmg](http://flatassembler.net/index.php) to build this applicat
 * The look-up table is finished
 * Overall structure of the emulator had been worked out
 * Some of the memory functions are tested to work
+* Switched to fasmg
+
+### Copyrights
+
+You can use **my** code for your non-commercial stuff as long as you keep a link to this repository.
+
+You should ask the respective authors of these not-written-by-me code for permissions:
+* fasmg_inc by [jacobly0](https://github.com/jacobly0)
+* ti83plusg_.inc by fghsgh (in Cemetech chat)
+* `CP HL, DE` routine by [calc84maniac](https://www.cemetech.net/forum/viewtopic.php?p=67697#67697)
+* code swapping two chunks of memory by jacobly0 (in Cemetech chat)
 
 ### Others
 im not familiar with z80 assembly nor git nor github nor English pls do not blame me if i made silly moves *sobs*
