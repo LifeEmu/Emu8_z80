@@ -2,3 +2,35 @@ include 'fasmg_inc/z80.inc'
 include 'fasmg_inc/ti83plusg_.inc'
 include 'fasmg_inc/tiformat.inc'
 format ti application 'Emu8_z80'
+
+init:
+	bcall(ti.ClrLCDFull)
+	ld	hl,		WorkRAMRequired
+	bcall(ti.EnoughMem)			; check if enough memory for Emu8sav0
+	jr	c,		.lowRAM		; quit if not enough memory
+	call	createWorkRAM			; else create Emu8sav0
+	call	searchSaves
+
+	jr	.quit
+
+.lowRAM:
+	ld	hl,		String.lowRAM
+	call	appPutS
+	bcall(ti.GetKey)
+	jr	.quit
+.quit:
+	bjump(ti.JForceCmdNoChar)
+
+appPutS:
+	ld	a,		(hl)
+	or	a
+	ret	z
+	bcall(ti.PutC)
+	inc	hl
+	jr	appPutS
+
+String:
+.lowRAM:
+	db	"Insufficient Mem", 0
+
+include 'src/util/savestate.z80'
