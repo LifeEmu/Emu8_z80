@@ -12,7 +12,7 @@ format ti executable 'TESTMEMS'
 	call	createWorkRAM
 	ld	a,		3
 	call	makeState			; make Emu8sav3
-	ld	hl,		saveName
+	ld	hl,		SaveName
 	rst	ti.rMOV9TOOP1			; copy "Emu8sav0" into OP1
 	ld	hl,		ti.OP1+8
 	ld	(hl),		'2'		; change the last digit to 2
@@ -28,6 +28,8 @@ format ti executable 'TESTMEMS'
 	ld	bc,		memory.rot1size
 	ld	de,		memory.rot2size
 	call	memSwapOverlap			; result should be "ROTATIONBrota"
+	call	mountWorkRAM
+	call	unmountWorkRAM
 	ret
 
 memory:

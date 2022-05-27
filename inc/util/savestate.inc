@@ -1,28 +1,37 @@
 ; appBackUpScreen reserved for variable-related stuff.
-;		pointer table	8 bytes
-;		Emu8sav0 ptr	2 bytes
-;				758 bytes left
-savePtrTable		equ	ti.appBackUpScreen
-savePtrTableSize	equ	8
-workRAMPtr		equ	savePtrTable + savePtrTableSize
-workRAMPtrSize		equ	2
+;		pointer table		10 bytes
+;		overlapping size	2 bytes
+;		mounting mode		1 byte
+;				755 bytes left
 
-; Emulated R/W memory regions
-U8RAM			equ	$C000
+SavePtrTable		equ	ti.appBackUpScreen
+SavePtrTableSize	equ	10
+WorkRAMPtr		equ	SavePtrTable
+; The 5 pointers above are modified to point to the ACTUAL data field!
+
+OverlapSize		equ	(SavePtrTable + SavePtrTableSize)
+OverlapSizeSize		equ	2
+MountMode		equ	(OverlapSize + OverlapSizeSize)
+MountModeSize		equ	1
+
+; Emulated R/W memory pointers
+MountSlot		equ	$C000
+U8RAM			equ	MountSlot
 U8RAMSize		equ	3584
-U8SFR			equ	U8RAM + U8RAMSize
+U8SFR			equ	(U8RAM + U8RAMSize)
 U8SFRSize		equ	256
-U8VRAM			equ	U8SFR + U8SFRSize
+U8VRAM			equ	(U8SFR + U8SFRSize)
 U8VRAMSize		equ	512
-U8Regs			equ	U8VRAM + U8VRAMSize
+U8Regs			equ	(U8VRAM + U8VRAMSize)
 U8RegsSize		equ	39
 
 ; savestate-related equates
-headerSize		equ	4
-saveSize		equ	headerSize + U8RAMSize + U8SFRSize + U8VRAMSize + U8RegsSize
-saveRequired		equ	15 + 2 + saveSize
-workRAMSize		equ	saveSize
-workRAMRequired		equ	15 + 2 + workRAMSize
+SizeFieldSize		equ	2
+HeaderSize		equ	4
+SaveSize		equ	(U8RAMSize + U8SFRSize + U8VRAMSize + U8RegsSize)
+SaveRequired		equ	(15 + SizeFieldSize + HeaderSize + SaveSize)
+WorkRAMSize		equ	SaveSize
+WorkRAMRequired		equ	(15 + SizeFieldSize + HeaderSize + WorkRAMSize)
 
 ; AppVar object's data structure:
 ; size field		2	bytes
@@ -37,7 +46,7 @@ workRAMRequired		equ	15 + 2 + workRAMSize
 ; Name length		1	byte
 ; Name			NameLen	bytes
 
-; So in my case I should call _EnoughMem with HL = saveSize + 15 + 2
+; So in my case I should call _EnoughMem with HL = SaveSize + 15 + 2
 
 ; Emu8sav0 uses 4395 bytes
 ; savestate		4395	bytes
