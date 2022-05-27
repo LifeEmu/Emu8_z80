@@ -3,72 +3,71 @@ include 'inc/util/savestate.inc'
 ; ================
 
 ; Search for savestates, store their data pointers into a fixed-length table.
-; $0000 = not found, empty; $0100 = archived
+; high byte $00 = not found, empty; $01 = archived
 ; In:		None
-; Out:		None
+; Out:		(SavePtrTable) - contains 5 pointers to data region, skipping size word
 ; Destroys:	All
 ; Test:		Passed
 searchSaves:
-	ld	hl,		savePtrTable
+	ld	hl,		SavePtrTable
 	push	hl				; push pointer into stack
-	ld	hl,		saveName
+	ld	hl,		SaveName
 	rst	ti.rMOV9TOOP1			; copy name into OP1
 .loop:
-	ld	hl,		ti.OP1 + 8		; load the address of number
-	inc	(hl)				; increment it
-	ld	a,		'5'
-	cp	(hl)				; compare number with '5'
-	jr	z,		.done		; if equal, search is done
-	bcall(ti.ChkFindSym)
 
+	bcall(ti.ChkFindSym)
 	jr	c,		.notFound	; no such variable
-	xor	a
-	cp	b
-	jr	nz,		.archived	; found but archived
+	inc	b				; test if B(FLASH page number) == 0
+	djnz	.archived			; found but archived
+	ex	de,		hl		; swap data pointer into HL
+	ld	bc,		SizeFieldSize+HeaderSize
+	add	hl,		bc		; skip size and header field
+	ex	de,		hl		; swap modified pointer back into DE
 	jr	.getAddr			; found and not archived
 .notFound:
-	ld	de,		0
+	ld	d,		0
 	jr	.getAddr
 .archived:
-	ld	de,		$0100
+	ld	d,		1
 .getAddr:
-	pop	hl				; get pointer to table
+	pop	hl				; get the pointer to table
 	ld	(hl),		e
 	inc	hl
 	ld	(hl),		d		; save DE into it
 	inc	hl
 	push	hl				; push incremented pointer back
-	jr	.loop
+	ld	hl,		ti.OP1 + 8	; load the address of number
+	inc	(hl)				; increment it
+	ld	a,		'5'
+	cp	(hl)				; compare number with '5'	
+	jr	nz,		.loop		; if not equal, search is not done
 .done:
 	pop	hl
 	ret
 
-saveName:
+SaveName:
 	db	ti.AppVarObj
-saveHeader:
+SaveHeader:
 	db	"Emu8"
 	db	"sav0"
 
-; Create and initialize AppVar "Emu8sav0", also initialize (workRAMPtr)
+; Create and initialize AppVar "Emu8sav0", also initialize (WorkRAMPtr)
 ; Memory should be checked BEFORE invoking this function.
 ; In:		None
-; Out:		DE - points to start of the savestate variable
+; Out:		DE - points to start of the savestate data
+;		(WorkRAMPtr) - points to data region of Emu8Sav0, skipping size word
 ; Destroys:	All
 ; Test:		Passed
 createWorkRAM:
-	ld	hl,		saveName
+	ld	hl,		SaveName
 	rst	ti.rMOV9TOOP1			; AppVar name
-	ld	hl,		workRAMSize	; size
+	ld	hl,		WorkRAMSize+HeaderSize	; size
 	bcall(ti.CreateAppVar)			; create the AppVar
-	push	de				; preserve variable data pointer
 	inc	de
 	inc	de				; skip size field
-	ld	hl,		saveHeader
-	ld	bc,		4
+	ld	hl,		SaveHeader
+	ld	bc,		HeaderSize
 	ldir					; copy header into variable
-	pop	hl				; restore variable data pointer
-	ld	(workRAMPtr),	hl		; save pointer
-	ex	de,		hl		; swap pointer back into DE
 	ret
 
 ; Copy savestate content between two savestate variables
@@ -78,12 +77,12 @@ createWorkRAM:
 ; Destroys:	All
 ; Test:		Undone
 copyState:
-	ld	bc,		2 + 4
+	ld	bc,		SizeFieldSize + HeaderSize
 	add	hl,		bc		; skip size field and header
 	ex	de,		hl
 	add	hl,		bc		; skip size field and header
 	ex	de,		hl
-	ld	bc,		saveSize-headerSize
+	ld	bc,		SaveSize
 	ldir					; copy the whole savestate
 	ret
 
@@ -96,7 +95,7 @@ copyState:
 ; Test:		Passed
 makeState:
 	push	af
-	ld	hl,		saveName
+	ld	hl,		SaveName
 	rst	ti.rMOV9TOOP1			; AppVar name
 	bcall(ti.ChkFindSym)			; HL points to VAT entry, carry reset
 	ld	bc,		14
@@ -105,6 +104,104 @@ makeState:
 	add	a,		'0'		; convert A into a char
 	ld	(hl),		a		; modify name
 	ret
+
+; Mount WorkRAM(in Emu8sav0) to MountSlot
+; In:		(WorkRAMPtr) - pointer to WorkRAM
+; Out:		(MountMode) - mounting method
+;		(OverlapSize) - size of the smaller block
+; Destroys:	All
+; Test:		Passed
+mountWorkRAM:
+	ld	hl,		(WorkRAMPtr)	; HL points to data field of Emu8sav0
+	ld	de,		MountSlot - WorkRAMSize
+	or	a
+	sbc	hl,		de
+	add	hl,		de		; is WorkRAM above MountSlot and no overlapping?
+	jr	c,		.swap		; if HL < DE, then no overlapping, just swap
+	jr	nz,		.notFarAbove	; if HL > DE, then test for other possibilities
+; else HL == DE, meaning MountSlot is just after WorkRAM, we can also just swap them
+.swap:
+	ld	a,		3
+	ld	(MountMode),	a		; set MountMode to 3 (simple swapping)
+	ld	de,		MountSlot
+	ld	bc,		WorkRAMSize	; pass parameters
+	jr	memSwap				; omitting CALL/RET since no further processing needed
+.notFarAbove:
+	ld	de,		MountSlot
+;	or	a				; here it must be NC, so no need to clear the carry
+	sbc	hl,		de
+	add	hl,		de		; is WorkRAM overlapping with MountSlot?
+	jr	z,		.nothing	; if HL == DE, then WorkRAM is already in place
+	jr	nc,		.below		; if HL > DE, then WorkRAM is below MountSlot
+; else HL < DE, meaning WorkRAM overlaps with MountSlot, and it's above MountSlot
+	ex	de,		hl
+	ld	a,		1
+	ld	(MountMode),	a		; set MountMode to 1 (overlapping, type 1)
+	or	a				; clear carry flag
+	sbc	hl,		de		; subtract 2 pointers to get the size of block 2
+	ld	(OverlapSize),	hl		; save it for later unmounting
+	ex	de,		hl		; swap size 2 into DE, WorkRAMPtr into HL
+	ld	bc,		WorkRAMSize	; initialize size 1
+	jr	memSwapOverlap			; swap 2 chunks of memory, again omitting CALL/RET
+.nothing:
+	xor	a
+	ld	(MountMode),	a		; set MountMode to 0 (already in place)
+	ret
+; ahhhh, still 2 cases to go...
+.below:
+	ld	de,		MountSlot + WorkRAMSize
+	or	a
+	sbc	hl,		de
+	add	hl,		de		; is WorkRAM overlapping with MountSlot, in another way?
+	jr	nc,		.swap		; if HL >= DE, then they're not overlapping, just swap
+; else HL < DE, meaning WorkRAM overlaps with MountSlot, and it's below MountSlot
+	ld	de,		MountSlot
+	ld	a,		2
+	ld	(MountMode),	a		; set MountMode to 2 (overlapping, type 2)
+	or	a				; clear carry flag
+	sbc	hl,		de		; subtract 2 pointers to get the size of block 1
+	ld	(OverlapSize),	hl		; save it for later unmounting
+	ld	b,		h
+	ld	c,		l		; initialize size 1
+	ex	de,		hl		; swap MountSlot into HL
+	ld	de,		WorkRAMSize	; initialize size 2
+	jr	memSwapOverlap			; swap 2 chunks of memory, again^2 omitting CALL/RET
+
+; restore memory layout affected by mountWorkRAM
+; assume mountWorkRAM is called, don't call this without checking
+; In:		(MountMode) - mounting method
+;		(OverlapSize) - size of the smaller block
+; Out:		None
+; Destroys:	All
+; Test:		Passed
+unmountWorkRAM:
+	ld	a,		(MountMode)	; read in mount mode
+	ld	b,		a		; copy it into B
+	or	a				; test if MountMode == 0
+	ret	z				; return if 0 (already in place)
+	djnz	.notMode1			; decrease mode by 1, jump if not zero
+.mode1:
+; overlapping, type 1
+; WorkRAM is above MountSlot
+	ld	hl,		(WorkRAMPtr)	; pointer
+	ld	bc,		(OverlapSize)	; size 1
+	ld	de,		WorkRAMSize	; size 2
+	jr	memSwapOverlap			; swap 2 memory blocks back in place
+.notMode1:
+	djnz	.mode3				; if mode is 2, here the jump is not taken
+.mode2:
+; overlapping, type 2
+; WorkRAM is below MountSlot
+	ld	hl,		MountSlot	; pointer
+	ld	bc,		WorkRAMSize	; size 1
+	ld	de,		(OverlapSize)	; size 2
+	jr	memSwapOverlap			; swap 2 memory blocks back in place
+.mode3:
+; simple swapping
+	ld	hl,		(WorkRAMPtr)
+	ld	de,		MountSlot
+	ld	bc,		WorkRAMSize
+	jr	memSwap
 
 ; Swap two equally-sized chunks of memory
 ; There's a JP instruction making it non-relocatable
@@ -169,6 +266,7 @@ memReverse:
 	or	a				; clear carry flag
 	sbc	hl,		de		; compare HL with DE. Carry set if HL < DE
 	add	hl,		de		; restore HL, also overflows back if SBC HL, DE overflows
+
 	jr	nc,		.loop		; loop if HL >= DE
 	pop	hl				; restore tail pointer
 	inc	hl				; modify it to point to first byte that does not belongs to the block
