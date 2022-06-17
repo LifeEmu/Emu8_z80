@@ -6,7 +6,7 @@ include 'inc/util/savestate.inc'
 ; high byte $00 = not found, empty; $01 = archived
 ; In:		None
 ; Out:		(SavePtrTable) - contains 5 pointers to data region, skipping size word
-; Destroys:	All
+; Destroys:	AF, BC, DE, HL
 ; Test:		Passed
 searchSaves:
 	ld	hl,		SavePtrTable
@@ -56,7 +56,7 @@ SaveHeader:
 ; In:		None
 ; Out:		DE - points to start of the savestate data
 ;		(WorkRAMPtr) - points to data region of Emu8Sav0, skipping size word
-; Destroys:	All
+; Destroys:	AF, BC, DE, HL
 ; Test:		Passed
 createWorkRAM:
 	ld	hl,		SaveName
@@ -74,7 +74,7 @@ createWorkRAM:
 ; In:		DE - points to start of the destination
 ;		HL - points to start of a savestate variable
 ; Out:		None
-; Destroys:	All
+; Destroys:	F, BC, DE, HL
 ; Test:		Undone
 copyState:
 	ld	bc,		SizeFieldSize + HeaderSize
@@ -91,7 +91,7 @@ copyState:
 ; Only invoke this function AFTER createWorkRAM!
 ; In:		A - new number (NOT character!)
 ; Out:		None
-; Destroys:	All
+; Destroys:	AF, BC, DE, HL
 ; Test:		Passed
 makeState:
 	push	af
@@ -109,7 +109,7 @@ makeState:
 ; In:		(WorkRAMPtr) - pointer to WorkRAM
 ; Out:		(MountMode) - mounting method
 ;		(OverlapSize) - size of the smaller block
-; Destroys:	All
+; Destroys:	AF, BC, DE, HL
 ; Test:		Passed
 mountWorkRAM:
 	ld	hl,		(WorkRAMPtr)	; HL points to data field of Emu8sav0
@@ -128,7 +128,7 @@ mountWorkRAM:
 	jr	memSwap				; omitting CALL/RET since no further processing needed
 .notFarAbove:
 	ld	de,		MountSlot
-;	or	a				; here it must be NC, so no need to clear the carry
+; here it must be NC, so no need to clear the carry
 	sbc	hl,		de
 	add	hl,		de		; is WorkRAM overlapping with MountSlot?
 	jr	z,		.nothing	; if HL == DE, then WorkRAM is already in place
@@ -147,7 +147,6 @@ mountWorkRAM:
 	xor	a
 	ld	(MountMode),	a		; set MountMode to 0 (already in place)
 	ret
-; ahhhh, still 2 cases to go...
 .below:
 	ld	de,		MountSlot + WorkRAMSize
 	or	a
@@ -172,7 +171,7 @@ mountWorkRAM:
 ; In:		(MountMode) - mounting method
 ;		(OverlapSize) - size of the smaller block
 ; Out:		None
-; Destroys:	All
+; Destroys:	AF, BC, DE, HL
 ; Test:		Passed
 unmountWorkRAM:
 	ld	a,		(MountMode)	; read in mount mode
@@ -208,7 +207,7 @@ unmountWorkRAM:
 ; In:		HL - points to start of a memory block
 ;		DE - points to start of another memory block
 ;		BC - size of the blocks to be swapped
-; Destroys:	All
+; Destroys:	AF, BC, DE, HL
 ; Test:		Passed
 memSwap:
 	ld	a,		(de)
@@ -224,7 +223,7 @@ memSwap:
 ;		BC - size of the first part
 ;		DE - size of the second part
 ; Out:		None
-; Destroys:	All
+; Destroys:	AF, BC, DE, HL
 ; Test:		Passed
 memSwapOverlap:
 	push	hl
@@ -240,15 +239,13 @@ memSwapOverlap:
 	ld	c,		l
 	ld	b,		h		; copy the total size into BC
 	pop	hl				; restore the pointer
-;	call	memReverse			; reverse the whole thing
-;	ret
 ; tail call and omitting jp memReverse
 
 ; Reverse a chunk of memory
 ; In:		HL - points to start of a memory block
 ;		BC - size of the memory block
 ; Out:		HL - points to the first byte that doesn't belong to the memory block
-; Destroys:	All
+; Destroys:	AF, BC, DE, HL
 ; Test:		Passed
 memReverse:
 	push	hl				; preserve pointer

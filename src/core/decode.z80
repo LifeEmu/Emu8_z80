@@ -14,24 +14,9 @@ decodeLUT:
 	ld	a,		l
 	and	$0f				; lower nybble in A
 	or	h				; combine 2 parts together
-;	ld	hl,		table_decode
+
 	ld	h,		(shr table_decode, 8) and $ff
-
-; 1 byte, 4 T-states, table_decode must be aligned to 256-byte boundary
-; also change the "LD HL, table_decode" to "LD H, table_decode>>8"
 	ld	l,		a
-
-; 5 bytes, 19/24 T-states
-;	add	a,		l		; 4
-;	ld	l,		a		; 4
-;	jr	nc,		$+3		; 12(nc)/7(c)
-;	inc	h				; 4
-
-; 4 bytes, 22 T-states, destroys DE (Tari's solution)
-;	ld	d,		0		; 7
-;	ld	e,		a		; 4
-;	add	hl,		de		; 11
-
 	add	hl,		hl		; multiply index by 2
 
 	db	(($ + $ff) and $ff00) - $ dup $ff

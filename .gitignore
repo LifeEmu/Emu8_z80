@@ -1,0 +1,9 @@
+#Text editor backup files
+*.bak
+
+#assembled results
+*.8xk
+*.8xp
+
+#Assembling scripts
+*.bat

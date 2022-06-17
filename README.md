@@ -2,19 +2,19 @@
 A CASIO fx-ES PLUS series calculator emulator for TI-83 Plus series calculator.
 
 ## Introduction
-NOTE: This program is currently unfinished.
+NOTE: This program is still under developmenting.
 
 The goal of this program is to emulate an Lapis LSI named ML610901, which is used by CASIO fx-ES PLUS series scientific calculators, on a TI-83 Plus series calculator.
 
 Currently the target is only TI-83 Plus and its monochrome variants.
 
 ## Installing
-*This project is still on working*
+*This project is still under developmenting*
 
 Since the ROMs of CASIO fx-ES PLUS calculators are copyrighted by CASIO, I can't place ROM here and you need to build the application by yourself.
 
 ## Building
-*This project is still on working and cannot be built currently*
+*This project is still under developmenting on and cannot be built currently*
 
 You will need [fasmg](http://flatassembler.net/index.php) to build this application.
 
@@ -26,7 +26,7 @@ You will need [fasmg](http://flatassembler.net/index.php) to build this applicat
 ## Special Thanks to...
 * Zeroko for overall program structure
 * calc84maniac for their look-up table idea
-* Tari for variable data structure information
+* Tari for variable/application data structure information
 * fghsgh for helps on memory stuff, and fasmg information
 * jacobly for [his fasmg header files](https://github.com/jacobly0/fasmg-z80)
 * LogicalJoe for fasmg stuff
@@ -37,20 +37,21 @@ You will need [fasmg](http://flatassembler.net/index.php) to build this applicat
 
 ### Current progress
 
-* The look-up table is finished
+* The vector table is finished
 * Overall structure of the emulator had been worked out
 * Some of the memory functions are tested to work
 * Switched to fasmg
+* Savestate functions and workRAM-related stuffs are working properly
 
 ### Copyrights
 
 You can use **my** code for your non-commercial stuff as long as you keep a link to this repository.
 
 You should ask the respective authors of these not-written-by-me code for permissions:
-* fasmg_inc by [jacobly0](https://github.com/jacobly0)
+* fasmg_inc by [jacobly0](https://github.com/jacobly0/fasmg-z80)
 * ti83plusg_.inc by fghsgh (in Cemetech chat)
 * `CP HL, DE` routine by [calc84maniac](https://www.cemetech.net/forum/viewtopic.php?p=67697#67697)
-* code swapping two chunks of memory by jacobly0 (in Cemetech chat)
+* code for swapping two chunks of memory by jacobly0 (in Cemetech chat)
 
 ### Others
-im not familiar with z80 assembly nor git nor github nor English pls do not blame me if i made silly moves *sobs*
+im not familiar with z80 assembly nor git nor github nor English pls do not blame me if i did silly things *sobs*
