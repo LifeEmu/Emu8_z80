@@ -19,6 +19,11 @@ format ti executable 'TESTMEMS'
 	bcall(ti.Arc_Unarc)			; archive "Emu8sav2"
 	call	createWorkRAM			; make Emu8sav0
 	call	searchSaves			; search for savestates, results are in savePtrTable
+	ld	hl,		(SavePtrTable+6); load pointer to Emu8Sav3 into HL
+	ld	bc,		-4
+	add	hl,		bc		; move HL to point to header field
+	ld	(hl),		'u'		; modify the header
+	call	searchSaves			; search again
 
 	ld	hl,		memory.swap1
 	ld	de,		memory.swap2

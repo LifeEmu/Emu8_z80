@@ -1,7 +1,5 @@
 include 'inc/util/savestate.inc'
 
-; ================
-
 ; Search for savestates, store their data pointers into a fixed-length table.
 ; high byte $00 = not found, empty; $01 = archived
 ; In:		None
@@ -19,9 +17,20 @@ searchSaves:
 	jr	c,		.notFound	; no such variable
 	inc	b				; test if B(FLASH page number) == 0
 	djnz	.archived			; found but archived
+; else an AppVar named "Emu8Sav*" exists
 	ex	de,		hl		; swap data pointer into HL
-	ld	bc,		SizeFieldSize+HeaderSize
-	add	hl,		bc		; skip size and header field
+	inc	hl
+	inc	hl				; skip size field (2 bytes)
+
+	ld	bc,		HeaderSize	; set counter
+	ld	de,		SaveHeader	; set pointer
+.checkHeader:
+	ld	a,		(de)		; load 1 byte for comparing
+	inc	de				; move pointer
+	cpi					; compare A with (HL)
+	jr	nz,		.notFound	; jump away if it doesn't match
+	jp	pe,		.checkHeader	; loop if BC is not zero
+
 	ex	de,		hl		; swap modified pointer back into DE
 	jr	.getAddr			; found and not archived
 .notFound:
@@ -44,12 +53,6 @@ searchSaves:
 .done:
 	pop	hl
 	ret
-
-SaveName:
-	db	ti.AppVarObj
-SaveHeader:
-	db	"Emu8"
-	db	"sav0"
 
 ; Create and initialize AppVar "Emu8sav0", also initialize (WorkRAMPtr)
 ; Memory should be checked BEFORE invoking this function.

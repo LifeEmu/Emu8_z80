@@ -33,6 +33,13 @@ SaveRequired		equ	(15 + SizeFieldSize + HeaderSize + SaveSize)
 WorkRAMSize		equ	SaveSize
 WorkRAMRequired		equ	(15 + SizeFieldSize + HeaderSize + WorkRAMSize)
 
+; savestate name/header definitions
+SaveName:
+	db	ti.AppVarObj
+SaveHeader:
+	db	"Emu8"
+	db	"sav0"
+
 ; AppVar object's data structure:
 ; size field		2	bytes
 ; content		size	bytes
